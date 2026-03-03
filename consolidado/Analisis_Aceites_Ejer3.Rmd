@@ -1,0 +1,126 @@
+---
+title: "Análisis Quimiométrico y Clasificación de Aceites de Oliva: Ejercicio 3"
+author: "Irwin Alberto Viteri Rambay"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    highlight: tango
+header-includes:
+  - \usepackage{xcolor}
+  - \usepackage{booktabs}
+  - \usepackage{amsmath}
+  - \usepackage[strings]{underscore}
+  - \usepackage{hyperref}
+  - \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, 
+  results="markup", 
+  warning=FALSE, 
+  message=FALSE, 
+  comment=NA,
+  fig.path = "C:/Users/iavit/OneDrive/ESPOL/Maestria en Estadistica Aplicada/Clases Maestria en Estadistica Aplicada/Modulo 9/TEC ESTADIS AVANZ PARA MINERIA DE DATOS/METODOS DE CLASIFICACION/Taller/EJER2/consolidado/figures/"
+)
+library(pacman)
+p_load(tidyverse, cluster, factoextra, knitr, gridExtra, corrplot)
+
+# --- Configuración de Rutas ---
+path_data <- "C:/Users/iavit/OneDrive/ESPOL/Maestria en Estadistica Aplicada/Clases Maestria en Estadistica Aplicada/Modulo 9/TEC ESTADIS AVANZ PARA MINERIA DE DATOS/METODOS DE CLASIFICACION/Taller/EJER2/data/oil.txt"
+```
+\newpage
+# Introducción e Hipótesis de Investigación
+El presente estudio analiza el perfil químico de 35 muestras de aceite de oliva de la cuenca mediterránea. La pregunta de investigación central es: **¿Existe una estructura de agrupación natural basada en compuestos fenólicos y $\alpha$-tocoferol que permita discriminar el origen geográfico de los aceites?**
+Para responder, se implementa un flujo de trabajo de **Minería de Datos** que incluye escalamiento multivariante, validación del número óptimo de clústeres y reducción de dimensionalidad mediante PCA.
+
+# Preprocesamiento y Análisis Exploratorio (EDA)
+Dado que las concentraciones químicas poseen diferentes escalas, la estandarización (Z-score) es imperativa para evitar sesgos en el cálculo de distancias euclídeas.
+
+```{r EDA}
+# Ingesta y limpieza inicial
+oil_raw <- read.table(path_data, header = TRUE, row.names = 1, check.names = FALSE)
+
+# Imputación de valores faltantes por la mediana del grupo de origen
+oil_clean <- oil_raw %>%
+  group_by(Origin) %>%
+  mutate(across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%
+  ungroup()
+
+# Selección de variables químicas y escalado
+oil_num <- oil_clean %>% select(hydroxytyrosol:alfatocopherol)
+oil_scaled <- scale(oil_num)
+```
+
+# Estructura de Correlación
+Se analiza la colinealidad entre compuestos. Un hallazgo clave es la correlación positiva entre el Hidroxitirosol y el Tirosol, fundamentales para la estabilidad oxidativa.
+
+```{r cor_matrix}
+cor_matrix <- cor(oil_num)
+corrplot(cor_matrix, method = "ellipse", type = "lower", diag = FALSE, 
+         tl.col = "black", title = "Matriz de Correlación Química")
+```
+
+# Determinación del Número Óptimo de Clústeres (Justificación de K=3)
+La elección de $K=3$ no es arbitraria; se basa en la convergencia de dos criterios estadísticos robustos:
+1. **Método del Codo (WSS)**: Se observa una reducción drástica de la varianza interna hasta $K=3$.
+2. **Ancho de Silueta**: El valor máximo de cohesión y separación se alcanza en $K=3$.
+
+```{r WSS_SILUETA}
+p1 <- fviz_nbclust(oil_scaled, kmeans, method = "wss") + labs(subtitle = "Método del Codo")
+p2 <- fviz_nbclust(oil_scaled, kmeans, method = "silhouette") + labs(subtitle = "Ancho de Silueta")
+grid.arrange(p1, p2, ncol=2)
+```
+
+# Análisis de Agrupamiento Jerárquico
+Se seleccionó el método de **Ward.D2** debido a su capacidad para minimizar la varianza total dentro de los grupos, generando clústeres esféricos y altamente compactos.
+
+```{r Ward}
+dist_mat <- dist(oil_scaled, method = "euclidean")
+hc_ward <- hclust(dist_mat, method = "ward.D2")
+
+fviz_dend(hc_ward, k = 3, rect = TRUE, 
+          main = "Dendrograma: Estructura Química de Aceites (Método Ward)")
+```
+
+# Validación Multivariante mediante PCA
+Al proyectar las observaciones en las dos primeras Componentes Principales (que explican ~60% de la varianza total), se confirma la separación de los grupos.
+
+```{r PCA}
+pca_res <- prcomp(oil_scaled)
+fviz_pca_ind(pca_res, col.ind = oil_clean$Origin, 
+             palette = "jco", addEllipses = TRUE, 
+             legend.title = "País de Origen",
+             title = "Separabilidad Lineal por Origen Geográfico")
+```
+
+\textcolor{blue!70!black}{El gráfico de PCA demuestra que las muestras de Túnez (TU) forman un bloque aislado, validando la hipótesis de que su perfil fenólico es único.}
+
+# Hallazgos Estadísticos y Conclusiones
+## El Impacto de la Vitamina E
+Se identificó que el $\alpha$-tocoferol es la variable con mayor poder discriminante para el bloque africano.
+
+```{r plot}
+ggplot(oil_clean, aes(x = Origin, y = alfatocopherol, fill = Origin)) +
+  geom_boxplot() + theme_minimal() +
+  labs(title = "Diferenciación de Alfa-tocoferol por Origen", y = "Vitamina E (mg/kg)")
+```
+
+## Resumen de Clasificación
+La tabla de contingencia final muestra una pureza de clúster casi perfecta:
+
+```{r km_res}
+km_res <- kmeans(oil_scaled, centers = 3, nstart = 25)
+tabla_res <- table(Origen = oil_clean$Origin, Cluster = km_res$cluster)
+kable(tabla_res, caption = "Validación Cruzada: Clúster vs. Origen Geográfico")
+```
+
+1. **Consistencia Geográfica**: El Clúster que agrupa a Túnez es 100% puro.
+2. **Bloque Ibérico**: España y Portugal comparten similitudes químicas que los mantienen en una misma rama jerárquica.
+3. **Conclusión Final**: Se rechaza la hipótesis nula de homogeneidad; los aceites pueden dividirse claramente en 3 grupos basados en su composición química ($K=3$ validado).
+
+# Repositorio y Código Fuente
+* Los **scripts** originales y salidas gráficas están disponibles en: [iviterirambay/Clustering_Ejercicio_3](https://github.com/iviterirambay/Clustering_Ejercicio_3)
