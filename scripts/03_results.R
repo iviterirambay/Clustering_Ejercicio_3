@@ -48,12 +48,13 @@ write.csv(findings, file.path(path_output, "cluster_vs_origin.csv"))
 nombre_repo <- "Clustering_Ejercicio_3" 
 nombre_user <- "iviterirambay"
 remote_url <- paste0("https://github.com/", nombre_user, "/", nombre_repo, ".git")
+path_base <- "C:/Users/iavit/OneDrive/ESPOL/Maestria en Estadistica Aplicada/Clases Maestria en Estadistica Aplicada/Modulo 9/TEC ESTADIS AVANZ PARA MINERIA DE DATOS/METODOS DE CLASIFICACION/Taller/EJER2"
 setwd(path_base)
 
 # 2. Preparar el mensaje del commit
 # Usamos shQuote para que los espacios y caracteres especiales no rompan el comando
 fecha_ejecucion <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-mensaje_texto <- paste0("feat(scripts): ", fecha_ejecucion, " | Implementacion de archivos 01_eda.R - Análisis Exploratorio de Datos / 02_clustering.R - Análisis de Agrupamiento / 03_results.R - Visualización Final y Hallazgos con sus respectivos outputs.")
+mensaje_texto <- paste0("feat(readme): ", fecha_ejecucion, " | Actualización de archivo readme para explicación de resultados encontrados.")
 comando_commit <- paste0('git commit -m ', shQuote(mensaje_texto))
 
 # 3. Ejecutar Pipeline de Git
